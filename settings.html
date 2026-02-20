@@ -1,0 +1,128 @@
+<div class="cycle-tracker-settings ct-wrap">
+  <div class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+      <b>🌙 Cycle Tracker</b>
+      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+
+    <div class="inline-drawer-content">
+
+      <!-- ① 基础输入 -->
+      <div class="ct-field">
+        <label>📅 上次月经开始日期</label>
+        <input type="date" id="ct_last_start" class="text_pole" />
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        <div class="ct-field" style="flex:1">
+          <label>周期长度（天）</label>
+          <input type="number" id="ct_cycle_len" class="text_pole" value="28" min="21" max="45" />
+        </div>
+        <div class="ct-field" style="flex:1">
+          <label>经期长度（天）</label>
+          <input type="number" id="ct_period_len" class="text_pole" value="5" min="2" max="10" />
+        </div>
+      </div>
+
+      <div class="ct-btn-row">
+        <input type="button" id="ct_generate" class="menu_button" value="📊 生成完整周期视图" />
+        <input type="button" id="ct_save"     class="menu_button" value="💾 保存设置" />
+      </div>
+
+      <hr />
+
+      <!-- ② 当前状态卡片 -->
+      <div id="ct_status_card" class="ct-status-card" style="display:none">
+        <div class="ct-status-phase" id="ct_phase_label"></div>
+        <div class="ct-status-meta"  id="ct_phase_meta"></div>
+        <div class="ct-inject-preview-label">当前注入到世界书触发词的标签：</div>
+        <div class="ct-inject-preview" id="ct_trigger_tag"></div>
+      </div>
+
+      <!-- ③ 周期时间轴 -->
+      <div id="ct_timeline_wrap" class="ct-timeline-wrap" style="display:none">
+        <div class="ct-timeline-label">完整周期预览（悬停查看具体日期和阶段）</div>
+        <div class="ct-timeline" id="ct_timeline"></div>
+        <div class="ct-legend">
+          <div class="ct-legend-item"><div class="ct-legend-dot" style="background:#e74c3c"></div>经期</div>
+          <div class="ct-legend-item"><div class="ct-legend-dot" style="background:#2ecc71"></div>卵泡期</div>
+          <div class="ct-legend-item"><div class="ct-legend-dot" style="background:#f1c40f"></div>排卵期</div>
+          <div class="ct-legend-item"><div class="ct-legend-dot" style="background:#9b59b6"></div>黄体期</div>
+          <div class="ct-legend-item"><div class="ct-legend-dot" style="background:#e67e22"></div>PMS</div>
+        </div>
+      </div>
+
+      <hr />
+
+      <!-- ④ 手动校正 -->
+      <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header" style="font-size:0.9em">
+          <span>🔧 手动校正今日周期天数</span>
+          <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+          <div style="font-size:0.82em; opacity:0.65; margin-bottom:10px; line-height:1.5">
+            如果计算结果与实际不符，可在此直接指定"今天是周期第几天"，插件会反推并覆盖开始日期。
+          </div>
+          <div class="ct-correction-box">
+            <div class="ct-correction-row">
+              <label>今天是周期第</label>
+              <input type="number" id="ct_override_day" class="text_pole" min="1" max="45" placeholder="如：3" />
+              <label>天</label>
+              <input type="button" id="ct_apply_override" class="menu_button" value="应用校正" />
+            </div>
+            <div id="ct_override_result" style="margin-top:8px; font-size:0.82em; opacity:0.7"></div>
+          </div>
+        </div>
+      </div>
+
+      <hr />
+
+      <!-- ⑤ 世界书集成说明 -->
+      <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header" style="font-size:0.9em">
+          <span>📖 世界书集成说明</span>
+          <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+          <div style="font-size:0.82em; line-height:1.7; opacity:0.8">
+            <b>工作原理：</b><br>
+            插件每轮对话前，将当前阶段标签（如 <code>cycle:menstrual</code>）静默插入prompt尾部。
+            世界书里为每个阶段建一个entry，触发词设为对应标签，entry内容写该阶段的背景描述。
+            LLM读到entry后自行判断是否在当前场景里体现，不会强制影响剧情方向。<br><br>
+            <b>各阶段触发词：</b><br>
+            经期：<code>cycle:menstrual</code><br>
+            卵泡期：<code>cycle:follicular</code><br>
+            排卵期：<code>cycle:ovulation</code><br>
+            黄体期：<code>cycle:luteal</code><br>
+            PMS：<code>cycle:pms</code><br><br>
+            世界书entry模板见安装包内 <b>worldbook_entries.md</b> 文件。
+          </div>
+        </div>
+      </div>
+
+      <hr />
+
+      <!-- ⑥ 独立API面板（仅显示，不影响正文） -->
+      <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header" style="font-size:0.9em">
+          <span>📡 状态数据面板 <span class="ct-badge">仅显示</span></span>
+          <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+          <div class="ct-api-box">
+            <div class="ct-api-note">
+              以下数据仅在此面板显示，与正文注入完全独立。可复制供外部脚本或记录使用。
+            </div>
+            <div class="ct-api-json" id="ct_api_json">{ 尚未生成，请点击"生成完整周期视图" }</div>
+          </div>
+          <div class="ct-btn-row">
+            <input type="button" id="ct_copy_json"   class="menu_button" value="📋 复制JSON" />
+            <input type="button" id="ct_refresh_api" class="menu_button" value="🔄 刷新" />
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /inline-drawer-content -->
+  </div><!-- /inline-drawer -->
+</div>

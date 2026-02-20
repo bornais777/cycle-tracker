@@ -1,0 +1,12 @@
+{
+    "display_name": "🌙 Cycle Tracker",
+    "loading_order": 10,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "linsu",
+    "version": "2.0.0",
+    "homePage": "https://github.com/your-username/cycle-tracker",
+    "auto_update": false
+}

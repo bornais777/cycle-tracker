@@ -1,0 +1,174 @@
+/* ── Cycle Tracker Styles ─────────────────────────────────── */
+
+.ct-wrap { padding: 8px 0; }
+
+.ct-field { margin: 10px 0; }
+.ct-field label {
+    display: block;
+    font-size: 0.85em;
+    margin-bottom: 4px;
+    opacity: 0.75;
+}
+
+/* ── Status Card ─────────────────────────────────────────── */
+.ct-status-card {
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 12px 0;
+    background: var(--SmartThemeBlurTintColor);
+    border-left: 4px solid var(--SmartThemeQuoteColor);
+}
+.ct-status-phase {
+    font-size: 1.05em;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+.ct-status-meta {
+    font-size: 0.83em;
+    opacity: 0.72;
+    line-height: 1.7;
+}
+.ct-inject-preview-label {
+    margin-top: 10px;
+    font-size: 0.78em;
+    opacity: 0.55;
+}
+.ct-inject-preview {
+    margin-top: 4px;
+    padding: 7px 10px;
+    background: rgba(0,0,0,0.18);
+    border-radius: 5px;
+    font-size: 0.8em;
+    font-family: monospace;
+    white-space: pre-wrap;
+    color: var(--SmartThemeQuoteColor);
+    word-break: break-word;
+}
+
+/* ── Timeline ────────────────────────────────────────────── */
+.ct-timeline-wrap { margin: 10px 0; }
+.ct-timeline-label {
+    font-size: 0.82em;
+    opacity: 0.6;
+    margin-bottom: 6px;
+}
+.ct-timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+.ct-day-cell {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72em;
+    cursor: default;
+    position: relative;
+    transition: transform 0.12s;
+    border: 1px solid transparent;
+    user-select: none;
+}
+.ct-day-cell:hover {
+    transform: scale(1.25);
+    z-index: 20;
+}
+.ct-day-cell.phase-menstrual  { background:#c0392b33; color:#e74c3c; border-color:#e74c3c55; }
+.ct-day-cell.phase-follicular { background:#27ae6033; color:#2ecc71; border-color:#2ecc7155; }
+.ct-day-cell.phase-ovulation  { background:#f39c1233; color:#f1c40f; border-color:#f1c40f55; }
+.ct-day-cell.phase-luteal     { background:#8e44ad33; color:#9b59b6; border-color:#9b59b655; }
+.ct-day-cell.phase-pms        { background:#e67e2233; color:#e67e22; border-color:#e67e2255; }
+.ct-day-cell.is-today {
+    box-shadow: 0 0 0 2px white;
+    font-weight: bold;
+    transform: scale(1.15);
+}
+
+/* ── Legend ──────────────────────────────────────────────── */
+.ct-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 8px 0 4px;
+    font-size: 0.78em;
+    opacity: 0.8;
+}
+.ct-legend-item { display: flex; align-items: center; gap: 5px; }
+.ct-legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+/* ── Manual Correction ───────────────────────────────────── */
+.ct-correction-box {
+    background: var(--SmartThemeBlurTintColor);
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0;
+}
+.ct-correction-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.ct-correction-row label { font-size: 0.85em; opacity: 0.75; white-space: nowrap; }
+.ct-correction-row input[type="number"] { width: 70px; }
+
+/* ── API Panel ───────────────────────────────────────────── */
+.ct-api-box {
+    background: var(--SmartThemeBlurTintColor);
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0;
+}
+.ct-api-note {
+    font-size: 0.8em;
+    opacity: 0.6;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+.ct-api-json {
+    font-family: monospace;
+    font-size: 0.8em;
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 5px;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.ct-btn-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+/* ── Badge ───────────────────────────────────────────────── */
+.ct-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    background: var(--SmartThemeQuoteColor);
+    color: #000;
+    margin-left: 6px;
+    vertical-align: middle;
+    opacity: 0.85;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+.ct-section-title {
+    font-size: 0.82em;
+    opacity: 0.55;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 14px 0 6px;
+}
