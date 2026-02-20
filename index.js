@@ -6,6 +6,17 @@
 (function () {
     'use strict';
 
+    // ── Error display ─────────────────────────────────────
+    window.onerror = function(msg, src, line) {
+        const d = document.createElement('div');
+        d.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;z-index:99999;' +
+            'background:#3a0000;color:#ff9999;padding:12px;border-radius:8px;font-size:12px;' +
+            'font-family:monospace;white-space:pre-wrap;word-break:break-all;border:1px solid #ff000055;';
+        d.textContent = '[CT Error]\n' + msg + '\nLine: ' + line;
+        document.body.appendChild(d);
+        setTimeout(function(){ d.remove(); }, 20000);
+    };
+
     const EXT = 'cycle-tracker';
 
     const PHASES = {
