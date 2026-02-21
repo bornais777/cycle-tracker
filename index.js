@@ -581,45 +581,59 @@
         LOG('初始化完成');
     }
 
-    // ==============================
-    // 入口 —— 多重保险
-    // ==============================
-    // 防止重复初始化
-    if (window.__cycleTrackerLoaded) {
-        LOG('已加载，跳过重复初始化');
-        return;
-    }
-    window.__cycleTrackerLoaded = true;
+    // ======================================================
+    // 入口与酒馆挂载逻辑 (全量替换此段)
+    // ======================================================
 
-    function tryInit() {
-        // 避免重复执行
+    async function tryInit() {
         if (window.__cycleTrackerInited) return;
-        window.__cycleTrackerInited = true;
+        
         try {
+            // 1. 执行核心初始化 (创建悬浮按钮和面板)
             init();
+            window.__cycleTrackerInited = true;
+            LOG('核心 UI 已加载');
+
+            // 2. 注册到左侧魔法棒扩展菜单 (确保万无一失)
+            const context = SillyTavern.getContext();
+            if (context && context.addExtensionButton) {
+                context.addExtensionButton(
+                    '🌙',               // 菜单图标
+                    '生理周期追踪器',      // 菜单名称
+                    () => {            // 点击动作
+                        const overlay = document.getElementById('cycle-tracker-overlay');
+                        if (overlay) {
+                            overlay.classList.add('ct-visible');
+                        } else {
+                            // 容错：如果面板还没创建，手动触发按钮点击
+                            document.getElementById('cycle-tracker-btn')?.click();
+                        }
+                    },
+                    'cycle-tracker'     // 唯一ID
+                );
+                LOG('已成功挂载至左侧魔法棒菜单');
+            }
         } catch (e) {
-            LOG('初始化出错', e);
-            window.__cycleTrackerInited = false; // 出错时允许重试
+            console.error('[CycleTracker] 初始化失败:', e);
         }
     }
 
+    // 立即尝试运行
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        tryInit();
+    } else {
+        window.addEventListener('DOMContentLoaded', tryInit);
+    }
+
+    // 针对 SillyTavern 加载机制的补丁
     try {
         const ctx = SillyTavern.getContext();
         if (ctx && ctx.eventSource && ctx.event_types) {
-            // APP_READY 在扩展加载后会自动触发（即使已经ready了）
+            // 如果 APP_READY 还没发，就挂载监听；如果发过了，tryInit 内部有锁不会跑两次
             ctx.eventSource.on(ctx.event_types.APP_READY, tryInit);
-        } else {
-            // getContext 可用但缺少事件系统，直接跑
-            tryInit();
         }
     } catch (e) {
-        LOG('getContext 异常，降级初始化', e);
-        // SillyTavern 对象还不可用，等 DOMContentLoaded
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', tryInit);
-        } else {
-            setTimeout(tryInit, 0);
-        }
+        // 忽略 getContext 报错，因为上面已经有 DOMContentLoaded 保底
     }
 
-})();
+})(); // 结尾闭合
