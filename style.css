@@ -251,3 +251,19 @@
 /* ============ tab内容 ============ */
 .ct-tab-content { display: none; }
 .ct-tab-content.active { display: block; }
+/* 解决侧边栏挤压 */
+.ct-grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.ct-wide-btn {
+    width: 100% !important;
+    display: block !important;
+    white-space: nowrap; /* 禁止文字换行，防止变竖 */
+}
+/* 魔法棒图标微调 */
+#cycle-tracker-wand {
+    color: #cba6f7 !important;
+}
