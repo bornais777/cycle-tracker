@@ -1,13 +1,16 @@
 {
-    "display_name": "🌙 生理周期追踪器",
-    "loading_order": 50,
-    "requires": [],
-    "optional": [],
+    "name": "cycle_tracker",
+    "display_name": "生理周期追踪",
+    "version": "1.0.0",
+    "description": "追踪生理周期的小助手",
+    "author": "Your Name",
     "js": "index.js",
     "css": "style.css",
     "is_module": true,
-    "author": "LinShu",
-    "version": "1.0.0",
-    "homePage": "",
-    "auto_update": false
+    "input_buttons": [
+        {
+            "id": "cycle_tracker_wand_btn",
+            "html": "input_button.html"
+        }
+    ]
 }
