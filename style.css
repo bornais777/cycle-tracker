@@ -67,3 +67,21 @@
     border-color: rgba(203, 166, 247, 0.5) !important;
     background: rgba(0, 0, 0, 0.6) !important;
 }
+/* 模仿日记本的古典弹窗风格 */
+#cycle_tracker-dialog {
+  background: linear-gradient(135deg, #f6ecd9 0%, #efe1c8 100%) !important;
+  border: 2px solid #caa574 !important;
+  color: #5c4033 !important;
+  font-family: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+}
+
+#cycle_tracker-dialog h3 {
+  color: #8b4513;
+  text-shadow: 1px 1px 0px rgba(255,255,255,0.5);
+}
+
+/* 魔法棒按钮强制显示 */
+#cycle-tracker-wand {
+  display: flex !important;
+  color: #cd853f !important;
+}
