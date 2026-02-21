@@ -582,17 +582,43 @@
     }
 
     // ==============================
-    // 入口
+    // 入口 —— 多重保险
     // ==============================
-    const { eventSource, event_types } = SillyTavern.getContext();
-    if (eventSource && event_types) {
-        eventSource.on(event_types.APP_READY, init);
-    } else {
-        // 降级：直接初始化
-        if (document.readyState === 'complete') {
+    // 防止重复初始化
+    if (window.__cycleTrackerLoaded) {
+        LOG('已加载，跳过重复初始化');
+        return;
+    }
+    window.__cycleTrackerLoaded = true;
+
+    function tryInit() {
+        // 避免重复执行
+        if (window.__cycleTrackerInited) return;
+        window.__cycleTrackerInited = true;
+        try {
             init();
+        } catch (e) {
+            LOG('初始化出错', e);
+            window.__cycleTrackerInited = false; // 出错时允许重试
+        }
+    }
+
+    try {
+        const ctx = SillyTavern.getContext();
+        if (ctx && ctx.eventSource && ctx.event_types) {
+            // APP_READY 在扩展加载后会自动触发（即使已经ready了）
+            ctx.eventSource.on(ctx.event_types.APP_READY, tryInit);
         } else {
-            window.addEventListener('load', init);
+            // getContext 可用但缺少事件系统，直接跑
+            tryInit();
+        }
+    } catch (e) {
+        LOG('getContext 异常，降级初始化', e);
+        // SillyTavern 对象还不可用，等 DOMContentLoaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', tryInit);
+        } else {
+            setTimeout(tryInit, 0);
         }
     }
 
