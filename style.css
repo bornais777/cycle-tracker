@@ -1,21 +1,69 @@
-/* 悬浮球美化 */
+/* 生理周期追踪器 - 核心美化样式 */
+
+/* 1. 侧边栏容器美化 - 模仿日记本古典风格 */
+#cycle_tracker-settings .inline-drawer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 18px;
+    background: linear-gradient(135deg, rgba(246, 236, 217, 0.1) 0%, rgba(239, 225, 200, 0.05) 100%); /* 古典底色微调 */
+    border-radius: 8px;
+}
+
+/* 2. 输入框美化 */
+.ct-grid label {
+    font-weight: bold;
+    color: var(--SmartThemeBodyColor);
+    margin-bottom: 5px;
+    display: block;
+    opacity: 0.9;
+}
+
+.ct-grid input.text_pole {
+    background: rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 6px !important;
+    padding: 8px !important;
+    transition: all 0.3s ease;
+}
+
+.ct-grid input.text_pole:focus {
+    border-color: #cba6f7 !important;
+    box-shadow: 0 0 8px rgba(203, 166, 247, 0.3);
+}
+
+/* 3. 保存按钮美化 - 模仿日记本的渐变金/棕色风格 */
+.ct-wide-btn {
+    width: 100% !important;
+    min-height: 42px !important;
+    background: linear-gradient(135deg, #daa520 0%, #cd853f 100%) !important; /* 日记本同款古典金 */
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 12px rgba(205, 133, 63, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+.ct-wide-btn:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+    box-shadow: 0 6px 15px rgba(205, 133, 63, 0.5) !important;
+}
+
+/* 4. 悬浮球美化 - 增加毛玻璃与发光效果 */
 #cycle-tracker-float {
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    user-select: none;
+    background: rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: blur(10px) !important; /* 高级感来源 */
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
 }
 
 #cycle-tracker-float:hover {
-    transform: scale(1.1) translateY(-3px);
-    background: rgba(0,0,0,0.6) !important;
-    box-shadow: 0 8px 20px rgba(203, 166, 247, 0.4);
-}
-
-#cycle-tracker-float:active {
-    transform: scale(0.9);
-}
-
-/* 魔法棒图标变紫色 */
-#cycle-tracker-wand {
-    color: #cba6f7 !important;
+    transform: scale(1.15) rotate(10deg);
+    border-color: rgba(203, 166, 247, 0.5) !important;
+    background: rgba(0, 0, 0, 0.6) !important;
 }
