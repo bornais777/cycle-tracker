@@ -267,3 +267,22 @@
 #cycle-tracker-wand {
     color: #cba6f7 !important;
 }
+/* 确保悬浮球可见 */
+#cycle-tracker-float {
+    display: block !important;
+    transition: transform 0.2s;
+}
+#cycle-tracker-float:hover {
+    transform: scale(1.2);
+}
+
+/* 侧边栏样式补丁 */
+.ct-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.ct-wide-btn {
+    width: 100% !important;
+    display: block !important;
+}
