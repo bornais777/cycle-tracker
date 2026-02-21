@@ -1,12 +1,12 @@
 {
-    "display_name": "🌙 Cycle Tracker",
-    "loading_order": 10,
+    "display_name": "🌙 生理周期追踪器",
+    "loading_order": 50,
     "requires": [],
     "optional": [],
     "js": "index.js",
-    "css": "",
-    "author": "linsu",
-    "version": "3.1.0",
-    "homePage": "https://github.com/bornais777/cycle-tracker",
+    "css": "style.css",
+    "author": "LinShu",
+    "version": "1.0.0",
+    "homePage": "",
     "auto_update": false
 }

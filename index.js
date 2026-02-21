@@ -1,537 +1,599 @@
-/**
- * Cycle Tracker v3.1 - Termux compatible
- * No ES module imports, uses SillyTavern globals directly
- */
-
+// Cycle Tracker Extension for SillyTavern
+// 生理周期追踪器 - 使用 SillyTavern.getContext() API
 (function () {
     'use strict';
 
-    // ── Error display ─────────────────────────────────────
-    window.onerror = function(msg, src, line) {
-        const d = document.createElement('div');
-        d.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;z-index:99999;' +
-            'background:#3a0000;color:#ff9999;padding:12px;border-radius:8px;font-size:12px;' +
-            'font-family:monospace;white-space:pre-wrap;word-break:break-all;border:1px solid #ff000055;';
-        d.textContent = '[CT Error]\n' + msg + '\nLine: ' + line;
-        document.body.appendChild(d);
-        setTimeout(function(){ d.remove(); }, 20000);
-    };
+    const MODULE_NAME = 'cycle_tracker';
+    const LOG = (msg, ...args) => console.log(`[CycleTracker] ${msg}`, ...args);
 
-    const EXT = 'cycle-tracker';
+    // ==============================
+    // 默认设置
+    // ==============================
+    const DEFAULT_SETTINGS = Object.freeze({
+        enabled: true,
+        cycleLength: 28,          // 周期天数
+        periodLength: 5,          // 经期天数
+        periodStartDates: [],     // 历史月经开始日期 ['YYYY-MM-DD', ...]
+        wiBookName: '',           // 世界书名称（留空=不注入）
+        wiEntryTitle: '生理周期状态', // 世界书条目关键词/标题
+        autoInject: true,         // 是否自动注入世界书
+        showBtn: true,            // 是否显示浮动按钮
+    });
 
+    // ==============================
+    // 阶段定义
+    // ==============================
     const PHASES = {
-        menstrual:  { label: '经期',  color: '#c07090', glow: '#c0709055', symptoms: '疲倦、腹部不适、情绪低落或敏感' },
-        follicular: { label: '卵泡期', color: '#7ab893', glow: '#7ab89355', symptoms: '精力逐渐恢复、思维清晰、社交意愿上升' },
-        ovulation:  { label: '排卵期', color: '#c9a84c', glow: '#c9a84c55', symptoms: '精力充沛、情绪开朗、表达欲和感知力强' },
-        luteal:     { label: '黄体期', color: '#8b7ab8', glow: '#8b7ab855', symptoms: '内收、需要独处、对细节和语气更敏感' },
-        pms:        { label: 'PMS',   color: '#b8896a', glow: '#b8896a55', symptoms: '情绪波动、易激惹或感伤、轻微身体预警' },
+        menstrual:  { name: '经期',   emoji: '🔴', days: null },
+        follicular: { name: '卵泡期', emoji: '🌱', days: null },
+        ovulation:  { name: '排卵期', emoji: '✨', days: null },
+        luteal:     { name: '黄体期', emoji: '🌙', days: null },
+        unknown:    { name: '未知',   emoji: '❓', days: null },
     };
 
-    const DEFAULTS = {
-        lastStart: '',
-        cycleLength: 28,
-        periodLength: 5,
-        injectEnabled: true,
-    };
+    // ==============================
+    // 工具函数
+    // ==============================
+    function today() {
+        return new Date().toISOString().slice(0, 10);
+    }
+    function parseDate(str) {
+        return new Date(str + 'T00:00:00');
+    }
+    function diffDays(dateStr1, dateStr2) {
+        return Math.round((parseDate(dateStr2) - parseDate(dateStr1)) / 86400000);
+    }
+    function addDays(dateStr, n) {
+        const d = parseDate(dateStr);
+        d.setDate(d.getDate() + n);
+        return d.toISOString().slice(0, 10);
+    }
+    function formatDate(dateStr) {
+        if (!dateStr) return '—';
+        const d = parseDate(dateStr);
+        return `${d.getMonth() + 1}月${d.getDate()}日`;
+    }
 
-    // ── Helpers ───────────────────────────────────────────
-
-    function getSettings() {
-        if (!window.extension_settings) window.extension_settings = {};
-        if (!window.extension_settings[EXT]) {
-            window.extension_settings[EXT] = Object.assign({}, DEFAULTS);
+    // ==============================
+    // 周期计算
+    // ==============================
+    function calcCycleStatus(settings) {
+        const { cycleLength, periodLength, periodStartDates } = settings;
+        if (!periodStartDates || periodStartDates.length === 0) {
+            return { phase: 'unknown', cycleDay: null, nextPeriod: null, daysUntilNext: null, ovulationDate: null };
         }
-        const s = window.extension_settings[EXT];
-        for (const [k, v] of Object.entries(DEFAULTS)) {
-            if (s[k] === undefined) s[k] = v;
+
+        const sorted = [...periodStartDates].sort();
+        const lastStart = sorted[sorted.length - 1];
+        const todayStr = today();
+        const daysSinceStart = diffDays(lastStart, todayStr);
+
+        // 在周期内的第几天（1-based）
+        const cycleDay = (daysSinceStart % cycleLength) + 1;
+        const actualDay = daysSinceStart + 1;
+
+        let phase;
+        if (actualDay <= periodLength) {
+            phase = 'menstrual';
+        } else {
+            // 排卵日 ≈ 周期第14天（从经期开始算）
+            const ovulationDay = cycleLength - 14;
+            if (actualDay <= ovulationDay - 2) {
+                phase = 'follicular';
+            } else if (actualDay <= ovulationDay + 2) {
+                phase = 'ovulation';
+            } else {
+                phase = 'luteal';
+            }
         }
-        return s;
-    }
 
-    function save() {
-        if (window.saveSettingsDebounced) window.saveSettingsDebounced();
-    }
+        // 下次经期
+        const cyclesElapsed = Math.floor(daysSinceStart / cycleLength);
+        const nextPeriodBase = addDays(lastStart, (cyclesElapsed + 1) * cycleLength);
+        const daysUntilNext = diffDays(todayStr, nextPeriodBase);
+        const actualNextPeriod = daysUntilNext < 0 ? addDays(lastStart, (cyclesElapsed + 2) * cycleLength) : nextPeriodBase;
+        const daysUntilActualNext = diffDays(todayStr, actualNextPeriod);
 
-    function getDayPhase(d, cycleLen, periodLen) {
-        const ovDay    = Math.round(cycleLen / 2);
-        const pmsStart = cycleLen - 4;
-        if (d <= periodLen)   return 'menstrual';
-        if (d <= ovDay - 2)   return 'follicular';
-        if (d <= ovDay + 1)   return 'ovulation';
-        if (d >= pmsStart)    return 'pms';
-        return 'luteal';
-    }
+        // 排卵日
+        const ovulationDate = addDays(lastStart, cyclesElapsed * cycleLength + (cycleLength - 14));
+        const ovulationDiff = diffDays(todayStr, ovulationDate);
 
-    function calcStatus() {
-        const s = getSettings();
-        if (!s.lastStart) return null;
-        const today = new Date(); today.setHours(0,0,0,0);
-        const start = new Date(s.lastStart); start.setHours(0,0,0,0);
-        const cycleLen  = s.cycleLength  || 28;
-        const periodLen = s.periodLength || 5;
-        const diff = Math.floor((today - start) / 86400000);
-        const dayInCycle = ((diff % cycleLen) + cycleLen) % cycleLen + 1;
-        const phaseKey = getDayPhase(dayInCycle, cycleLen, periodLen);
-        const phase = PHASES[phaseKey];
-        const daysUntilNext = cycleLen - dayInCycle + 1;
-        const nextDate = new Date(today);
-        nextDate.setDate(nextDate.getDate() + daysUntilNext);
         return {
-            dayInCycle, cycleLen, phaseKey,
-            phaseLabel: phase.label,
-            color: phase.color,
-            glow: phase.glow,
-            symptoms: phase.symptoms,
-            periodDay: dayInCycle <= periodLen ? dayInCycle : null,
-            daysUntilNext,
-            nextPeriodDate: nextDate.toISOString().slice(0,10),
-            triggerTag: 'cycle:' + phaseKey,
+            phase,
+            cycleDay: actualDay <= cycleLength ? actualDay : (actualDay % cycleLength) || cycleLength,
+            nextPeriod: actualNextPeriod,
+            daysUntilNext: daysUntilActualNext,
+            ovulationDate,
+            ovulationDiff,
+            lastStart,
         };
     }
 
-    function cycledayToDate(d) {
-        const s = getSettings();
-        if (!s.lastStart) return null;
-        const dt = new Date(s.lastStart);
-        dt.setHours(0,0,0,0);
-        dt.setDate(dt.getDate() + d - 1);
-        return dt.toLocaleDateString('zh-CN', { month:'numeric', day:'numeric' });
-    }
-
-    function showToast(msg) {
-        if (typeof toastr !== 'undefined') { toastr.warning(msg); return; }
-        const t = document.createElement('div');
-        t.textContent = msg;
-        Object.assign(t.style, {
-            position:'fixed', bottom:'180px', left:'50%', transform:'translateX(-50%)',
-            background:'#2a1f35', color:'#c4a8f0', padding:'8px 16px', borderRadius:'8px',
-            fontSize:'0.82em', zIndex:'10000', opacity:'0', transition:'opacity 0.2s',
-        });
-        document.body.appendChild(t);
-        setTimeout(function(){ t.style.opacity = '1'; }, 10);
-        setTimeout(function(){ t.style.opacity = '0'; setTimeout(function(){ t.remove(); }, 300); }, 2500);
-    }
-
-    // ── Prompt injection ──────────────────────────────────
-
-    function setupInjection() {
-        // Hook into SillyTavern's event system
-        const events = window.eventSource || (window.SillyTavern && window.SillyTavern.eventSource);
-        if (!events) {
-            setTimeout(setupInjection, 1000);
-            return;
-        }
-
-        // Try different event names used across ST versions
-        const evNames = [
-            'generate_before_combine_prompts',
-            'GENERATE_BEFORE_COMBINE_PROMPTS',
+    function buildWIContent(status, settings) {
+        const phaseInfo = PHASES[status.phase] || PHASES.unknown;
+        const lines = [
+            `【当前生理周期状态】`,
+            `阶段：${phaseInfo.emoji} ${phaseInfo.name}`,
         ];
-
-        evNames.forEach(function(ev) {
-            try {
-                events.on(ev, function(data) {
-                    const s = getSettings();
-                    if (!s.injectEnabled) return;
-                    const status = calcStatus();
-                    if (!status) return;
-                    const tag = '\n[' + status.triggerTag + ']';
-                    if (data && typeof data.after_note === 'string') {
-                        data.after_note += tag;
-                    } else if (data) {
-                        data.after_note = tag;
-                    }
-                });
-            } catch(e) {}
-        });
-    }
-
-    // ── Styles ────────────────────────────────────────────
-
-    function injectStyles() {
-        if (document.getElementById('ct-styles')) return;
-        const style = document.createElement('style');
-        style.id = 'ct-styles';
-        style.textContent = [
-            '#ct-fab{position:fixed;right:18px;bottom:120px;width:48px;height:48px;border-radius:50%;',
-            'background:linear-gradient(135deg,#2a1f35,#1a1428);border:1.5px solid #6b4d8044;',
-            'box-shadow:0 4px 20px #00000088,0 0 12px #9b6fc422;cursor:pointer;z-index:9998;',
-            'display:flex;align-items:center;justify-content:center;font-size:20px;',
-            'user-select:none;touch-action:none;transition:box-shadow .2s,transform .15s;}',
-
-            '#ct-fab:hover{box-shadow:0 4px 24px #00000099,0 0 18px #9b6fc455;transform:scale(1.08);}',
-
-            '#ct-overlay{position:fixed;inset:0;z-index:9997;display:none;}',
-
-            '#ct-panel{position:fixed;right:14px;bottom:178px;width:300px;max-height:72vh;',
-            'background:linear-gradient(160deg,#1c1525,#150f20);border:1px solid #3d2d5022;',
-            'border-radius:18px;box-shadow:0 8px 40px #00000099,0 0 0 1px #ffffff08;',
-            'z-index:9999;display:none;flex-direction:column;overflow:hidden;',
-            'font-family:-apple-system,"PingFang SC",sans-serif;touch-action:none;}',
-            '#ct-panel.open{display:flex;}',
-
-            '#ct-ph{padding:14px 16px 10px;cursor:grab;display:flex;align-items:center;',
-            'justify-content:space-between;border-bottom:1px solid #ffffff0a;flex-shrink:0;}',
-            '#ct-ph:active{cursor:grabbing;}',
-            '#ct-pt{font-size:.82em;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#9b7fc4;opacity:.85;}',
-            '#ct-pc{width:22px;height:22px;border-radius:50%;background:#ffffff0f;border:none;',
-            'color:#ffffff55;font-size:13px;cursor:pointer;display:flex;align-items:center;',
-            'justify-content:center;transition:background .15s;flex-shrink:0;}',
-            '#ct-pc:hover{background:#ffffff1a;color:#fff;}',
-
-            '#ct-pb{overflow-y:auto;flex:1;padding:14px 16px 18px;',
-            'scrollbar-width:thin;scrollbar-color:#3d2d50 transparent;}',
-            '#ct-pb::-webkit-scrollbar{width:4px;}',
-            '#ct-pb::-webkit-scrollbar-thumb{background:#3d2d50;border-radius:2px;}',
-
-            '#ct-sc{border-radius:12px;padding:14px;margin-bottom:14px;',
-            'background:#ffffff06;border:1px solid #ffffff0d;transition:border-color .4s,box-shadow .4s;}',
-            '#ct-pn{font-size:1.1em;font-weight:700;margin-bottom:2px;}',
-            '#ct-pd{font-size:.78em;opacity:.5;margin-bottom:8px;}',
-            '#ct-ps{font-size:.78em;opacity:.6;line-height:1.5;}',
-            '#ct-np{margin-top:8px;font-size:.75em;opacity:.4;}',
-
-            '.ct-sec{font-size:.7em;text-transform:uppercase;letter-spacing:.1em;',
-            'color:#9b7fc4;opacity:.6;margin:14px 0 8px;}',
-
-            '.ct-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}',
-            '.ct-lbl{font-size:.75em;opacity:.55;white-space:nowrap;min-width:52px;}',
-            '.ct-inp{flex:1;background:#ffffff08;border:1px solid #ffffff12;border-radius:8px;',
-            'padding:7px 10px;color:#e0d8f0;font-size:.82em;outline:none;',
-            'transition:border-color .2s;width:100%;box-sizing:border-box;}',
-            '.ct-inp:focus{border-color:#9b7fc455;}',
-            '.ct-inp[type=number]{max-width:72px;}',
-
-            '.ct-btn{width:100%;padding:9px;border-radius:9px;border:1px solid #9b7fc422;',
-            'background:linear-gradient(135deg,#2d1f42,#221832);color:#c4a8f0;font-size:.8em;',
-            'font-weight:600;letter-spacing:.04em;cursor:pointer;',
-            'transition:background .18s,box-shadow .18s;margin-bottom:6px;}',
-            '.ct-btn:hover{background:linear-gradient(135deg,#3a2850,#2d2040);box-shadow:0 2px 12px #9b7fc422;}',
-
-            '.ct-tog-row{display:flex;align-items:center;justify-content:space-between;margin:10px 0;}',
-            '.ct-tog-lbl{font-size:.78em;opacity:.6;}',
-            '.ct-tog{position:relative;width:36px;height:20px;cursor:pointer;}',
-            '.ct-tog input{opacity:0;width:0;height:0;}',
-            '.ct-tok{position:absolute;inset:0;border-radius:20px;background:#ffffff15;transition:background .2s;}',
-            '.ct-tog input:checked+.ct-tok{background:#7b5ca8;}',
-            '.ct-tob{position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;',
-            'background:#ffffffcc;transition:transform .2s;}',
-            '.ct-tog input:checked~.ct-tob{transform:translateX(16px);}',
-
-            '#ct-tl{display:flex;flex-wrap:wrap;gap:3px;}',
-            '.ct-day{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;',
-            'justify-content:center;font-size:.65em;cursor:default;border:1px solid transparent;',
-            'transition:transform .1s;position:relative;}',
-            '.ct-day:hover{transform:scale(1.3);z-index:5;}',
-            '.ct-day.today{box-shadow:0 0 0 1.5px #fff8;font-weight:bold;}',
-            '.ph-menstrual{background:#c0709022;color:#d4899a;border-color:#c0709033;}',
-            '.ph-follicular{background:#7ab89322;color:#8fccaa;border-color:#7ab89333;}',
-            '.ph-ovulation{background:#c9a84c22;color:#d4ba6a;border-color:#c9a84c33;}',
-            '.ph-luteal{background:#8b7ab822;color:#a090cc;border-color:#8b7ab833;}',
-            '.ph-pms{background:#b8896a22;color:#c9a080;border-color:#b8896a33;}',
-
-            '#ct-leg{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;}',
-            '.ct-li{display:flex;align-items:center;gap:5px;font-size:.7em;opacity:.55;}',
-            '.ct-ld{width:8px;height:8px;border-radius:2px;}',
-
-            '#ct-or{font-size:.75em;opacity:.5;margin-top:6px;line-height:1.5;}',
-            '.ct-div{height:1px;background:#ffffff08;margin:12px 0;}',
-        ].join('');
-        document.head.appendChild(style);
-    }
-
-    // ── Build UI ──────────────────────────────────────────
-
-    function buildUI() {
-        document.getElementById('ct-fab')?.remove();
-        document.getElementById('ct-panel')?.remove();
-        document.getElementById('ct-overlay')?.remove();
-
-        injectStyles();
-
-        // FAB
-        const fab = document.createElement('div');
-        fab.id = 'ct-fab';
-        fab.innerHTML = '🌙';
-        fab.title = 'Cycle Tracker';
-        document.body.appendChild(fab);
-
-        // Overlay
-        const overlay = document.createElement('div');
-        overlay.id = 'ct-overlay';
-        document.body.appendChild(overlay);
-
-        // Panel
-        const panel = document.createElement('div');
-        panel.id = 'ct-panel';
-        panel.innerHTML = [
-            '<div id="ct-ph">',
-            '  <div id="ct-pt">🌙 Cycle Tracker</div>',
-            '  <button id="ct-pc">✕</button>',
-            '</div>',
-            '<div id="ct-pb">',
-
-            '  <div id="ct-sc">',
-            '    <div id="ct-pn">—</div>',
-            '    <div id="ct-pd">请先设置经期开始日期</div>',
-            '    <div id="ct-ps"></div>',
-            '    <div id="ct-np"></div>',
-            '  </div>',
-
-            '  <div class="ct-sec">基础设置</div>',
-            '  <div class="ct-row">',
-            '    <span class="ct-lbl">经期开始</span>',
-            '    <input type="date" id="ct-date" class="ct-inp" />',
-            '  </div>',
-            '  <div class="ct-row">',
-            '    <span class="ct-lbl">周期长度</span>',
-            '    <input type="number" id="ct-clen" class="ct-inp" value="28" min="21" max="45" />',
-            '    <span style="font-size:.75em;opacity:.35">天</span>',
-            '  </div>',
-            '  <div class="ct-row">',
-            '    <span class="ct-lbl">经期长度</span>',
-            '    <input type="number" id="ct-plen" class="ct-inp" value="5" min="2" max="10" />',
-            '    <span style="font-size:.75em;opacity:.35">天</span>',
-            '  </div>',
-            '  <button class="ct-btn" id="ct-gen">生成完整周期视图</button>',
-
-            '  <div class="ct-tog-row">',
-            '    <span class="ct-tog-lbl">启用世界书触发注入</span>',
-            '    <label class="ct-tog">',
-            '      <input type="checkbox" id="ct-inj" checked />',
-            '      <div class="ct-tok"></div>',
-            '      <div class="ct-tob"></div>',
-            '    </label>',
-            '  </div>',
-
-            '  <div class="ct-div"></div>',
-            '  <div class="ct-sec">手动校正</div>',
-            '  <div class="ct-row">',
-            '    <span class="ct-lbl">今天第</span>',
-            '    <input type="number" id="ct-oday" class="ct-inp" min="1" max="45" placeholder="如 3" />',
-            '    <span style="font-size:.75em;opacity:.35">天</span>',
-            '    <button class="ct-btn" id="ct-obtn" style="width:auto;padding:7px 12px;margin:0;flex-shrink:0">应用</button>',
-            '  </div>',
-            '  <div id="ct-or"></div>',
-
-            '  <div id="ct-tls" style="display:none">',
-            '    <div class="ct-div"></div>',
-            '    <div class="ct-sec">周期视图</div>',
-            '    <div id="ct-tl"></div>',
-            '    <div id="ct-leg"></div>',
-            '  </div>',
-
-            '</div>',
-        ].join('');
-        document.body.appendChild(panel);
-
-        // ── Load saved values ──
-        const s = getSettings();
-        document.getElementById('ct-date').value = s.lastStart || '';
-        document.getElementById('ct-clen').value = s.cycleLength || 28;
-        document.getElementById('ct-plen').value = s.periodLength || 5;
-        document.getElementById('ct-inj').checked = s.injectEnabled !== false;
-
-        if (s.lastStart) refreshStatus();
-
-        // ── Open / close ──
-        let open = false;
-
-        function openPanel() {
-            panel.classList.add('open');
-            overlay.style.display = 'block';
-            open = true;
-            refreshStatus();
+        if (status.cycleDay) lines.push(`周期第 ${status.cycleDay} 天`);
+        if (status.nextPeriod) {
+            lines.push(`下次月经预计：${formatDate(status.nextPeriod)}（${status.daysUntilNext > 0 ? status.daysUntilNext + '天后' : '即将来临'}）`);
         }
-        function closePanel() {
-            panel.classList.remove('open');
-            overlay.style.display = 'none';
-            open = false;
+        if (status.ovulationDate) {
+            lines.push(`本周期排卵日约：${formatDate(status.ovulationDate)}（${status.ovulationDiff > 0 ? status.ovulationDiff + '天后' : status.ovulationDiff < 0 ? Math.abs(status.ovulationDiff) + '天前' : '今天'}）`);
         }
-
-        fab.addEventListener('click', function() { open ? closePanel() : openPanel(); });
-        overlay.addEventListener('click', closePanel);
-        document.getElementById('ct-pc').addEventListener('click', closePanel);
-
-        // ── Generate ──
-        document.getElementById('ct-gen').addEventListener('click', function() {
-            saveInputs();
-            const s2 = getSettings();
-            if (!s2.lastStart) { showToast('请先输入经期开始日期'); return; }
-            renderTimeline();
-            refreshStatus();
-            document.getElementById('ct-tls').style.display = 'block';
-        });
-
-        // ── Override ──
-        document.getElementById('ct-obtn').addEventListener('click', function() {
-            const cycleLen = parseInt(document.getElementById('ct-clen').value) || 28;
-            const day = parseInt(document.getElementById('ct-oday').value);
-            if (!day || day < 1 || day > cycleLen) { showToast('请输入 1–' + cycleLen + ' 之间的天数'); return; }
-            const today = new Date(); today.setHours(0,0,0,0);
-            const inf = new Date(today);
-            inf.setDate(today.getDate() - (day - 1));
-            const iso = inf.toISOString().slice(0,10);
-            const s2 = getSettings();
-            s2.lastStart   = iso;
-            s2.cycleLength = cycleLen;
-            s2.periodLength = parseInt(document.getElementById('ct-plen').value) || 5;
-            document.getElementById('ct-date').value = iso;
-            save();
-            refreshStatus();
-            if (document.getElementById('ct-tls').style.display !== 'none') renderTimeline();
-            document.getElementById('ct-or').textContent = '✓ 已校正为第 ' + day + ' 天，推算开始日期 ' + iso;
-        });
-
-        // ── Inject toggle ──
-        document.getElementById('ct-inj').addEventListener('change', function(e) {
-            getSettings().injectEnabled = e.target.checked;
-            save();
-        });
-
-        // ── Drag: FAB ──
-        makeDraggable(fab);
-
-        // ── Drag: Panel by header ──
-        makeDraggable(panel, document.getElementById('ct-ph'));
+        if (status.lastStart) lines.push(`上次月经开始：${formatDate(status.lastStart)}`);
+        lines.push(`周期设定：${settings.cycleLength}天，经期${settings.periodLength}天`);
+        return lines.join('\n');
     }
 
-    // ── Save inputs ───────────────────────────────────────
-
-    function saveInputs() {
-        const s = getSettings();
-        s.lastStart    = document.getElementById('ct-date').value;
-        s.cycleLength  = parseInt(document.getElementById('ct-clen').value) || 28;
-        s.periodLength = parseInt(document.getElementById('ct-plen').value) || 5;
-        save();
-    }
-
-    // ── Refresh status card ───────────────────────────────
-
-    function refreshStatus() {
-        saveInputs();
-        const status = calcStatus();
-        const pn = document.getElementById('ct-pn');
-        const pd = document.getElementById('ct-pd');
-        const ps = document.getElementById('ct-ps');
-        const np = document.getElementById('ct-np');
-        const sc = document.getElementById('ct-sc');
-        if (!pn) return;
-
-        if (!status) {
-            pn.textContent = '—';
-            pd.textContent = '请先设置经期开始日期';
-            ps.textContent = '';
-            np.textContent = '';
-            sc.style.borderColor = '#ffffff0d';
-            sc.style.boxShadow = 'none';
-            return;
+    // ==============================
+    // 设置管理
+    // ==============================
+    function getSettings() {
+        const ctx = SillyTavern.getContext();
+        if (!ctx.extensionSettings[MODULE_NAME]) {
+            ctx.extensionSettings[MODULE_NAME] = structuredClone(DEFAULT_SETTINGS);
         }
-
-        const periodInfo = status.periodDay ? '  经期第 ' + status.periodDay + ' 天' : '';
-        pn.textContent = status.phaseLabel;
-        pn.style.color = status.color;
-        pd.textContent = '周期第 ' + status.dayInCycle + ' / ' + status.cycleLen + ' 天' + periodInfo;
-        ps.textContent = status.symptoms;
-        np.textContent = '下次月经约 ' + status.daysUntilNext + ' 天后（' + status.nextPeriodDate + '）';
-        sc.style.borderColor = status.color + '33';
-        sc.style.boxShadow = '0 0 18px ' + status.glow;
-    }
-
-    // ── Timeline ──────────────────────────────────────────
-
-    function renderTimeline() {
-        const s = getSettings();
-        const cycleLen  = s.cycleLength  || 28;
-        const periodLen = s.periodLength || 5;
-        const status    = calcStatus();
-        const todayDay  = status ? status.dayInCycle : null;
-
-        const tl  = document.getElementById('ct-tl');
-        const leg = document.getElementById('ct-leg');
-        if (!tl) return;
-        tl.innerHTML = '';
-        leg.innerHTML = '';
-
-        for (let d = 1; d <= cycleLen; d++) {
-            const pk    = getDayPhase(d, cycleLen, periodLen);
-            const phase = PHASES[pk];
-            const isToday = d === todayDay;
-            const dateStr = cycledayToDate(d) || '';
-
-            const cell = document.createElement('div');
-            cell.className = 'ct-day ph-' + pk + (isToday ? ' today' : '');
-            cell.textContent = d;
-            cell.title = '第 ' + d + ' 天' + (dateStr ? '  ' + dateStr : '') + '\n' + phase.label + (isToday ? '\n← 今天' : '');
-            tl.appendChild(cell);
-        }
-
-        const shown = {};
-        for (let d = 1; d <= cycleLen; d++) {
-            const pk = getDayPhase(d, cycleLen, periodLen);
-            if (!shown[pk]) {
-                shown[pk] = true;
-                const item = document.createElement('div');
-                item.className = 'ct-li';
-                item.innerHTML = '<div class="ct-ld" style="background:' + PHASES[pk].color + '"></div>' + PHASES[pk].label;
-                leg.appendChild(item);
+        // 补全缺失字段
+        for (const key of Object.keys(DEFAULT_SETTINGS)) {
+            if (!Object.hasOwn(ctx.extensionSettings[MODULE_NAME], key)) {
+                ctx.extensionSettings[MODULE_NAME][key] = DEFAULT_SETTINGS[key];
             }
         }
+        return ctx.extensionSettings[MODULE_NAME];
     }
 
-    // ── Draggable ─────────────────────────────────────────
-
-    function makeDraggable(el, handle) {
-        const h = handle || el;
-        let sx, sy, ox, oy, dragging = false;
-
-        function start(e) {
-            const t = e.touches ? e.touches[0] : e;
-            sx = t.clientX; sy = t.clientY;
-            const r = el.getBoundingClientRect();
-            ox = r.left; oy = r.top;
-            dragging = true;
-            el.style.transition = 'none';
-            e.preventDefault();
-        }
-
-        function move(e) {
-            if (!dragging) return;
-            const t = e.touches ? e.touches[0] : e;
-            let nx = ox + (t.clientX - sx);
-            let ny = oy + (t.clientY - sy);
-            const r = el.getBoundingClientRect();
-            nx = Math.max(0, Math.min(window.innerWidth  - r.width,  nx));
-            ny = Math.max(0, Math.min(window.innerHeight - r.height, ny));
-            el.style.left   = nx + 'px';
-            el.style.top    = ny + 'px';
-            el.style.right  = 'auto';
-            el.style.bottom = 'auto';
-            e.preventDefault();
-        }
-
-        function end() { dragging = false; el.style.transition = ''; }
-
-        h.addEventListener('mousedown',  start, { passive: false });
-        h.addEventListener('touchstart', start, { passive: false });
-        document.addEventListener('mousemove',  move, { passive: false });
-        document.addEventListener('touchmove',  move, { passive: false });
-        document.addEventListener('mouseup',    end);
-        document.addEventListener('touchend',   end);
+    function saveSettings() {
+        SillyTavern.getContext().saveSettingsDebounced();
     }
 
-    // ── Init ──────────────────────────────────────────────
+    // ==============================
+    // 世界书注入
+    // ==============================
+    async function injectToWorldInfo() {
+        const settings = getSettings();
+        const wiStatus = document.getElementById('ct-wi-status');
 
+        function setWiStatus(type, msg) {
+            if (!wiStatus) return;
+            wiStatus.className = `ct-wi-status ct-wi-${type}`;
+            wiStatus.textContent = msg;
+        }
+
+        if (!settings.wiBookName || !settings.autoInject) {
+            setWiStatus('warn', '⚠ 未配置世界书或自动注入已关闭');
+            return;
+        }
+
+        const ctx = SillyTavern.getContext();
+        const status = calcCycleStatus(settings);
+        const content = buildWIContent(status, settings);
+
+        try {
+            // 获取世界书列表
+            const response = await fetch('/api/worldinfo/get', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: settings.wiBookName }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (!data || !data.entries) {
+                throw new Error('世界书数据格式错误');
+            }
+
+            // 查找已有条目
+            const entries = Object.values(data.entries);
+            const existing = entries.find(e =>
+                (e.comment && e.comment.includes(settings.wiEntryTitle)) ||
+                (e.key && e.key.some && e.key.some(k => k.includes(settings.wiEntryTitle)))
+            );
+
+            if (existing) {
+                // 更新
+                existing.content = content;
+                existing.comment = settings.wiEntryTitle;
+            } else {
+                // 新建
+                const newUid = Date.now();
+                data.entries[newUid] = {
+                    uid: newUid,
+                    key: [settings.wiEntryTitle, '生理周期', '月经'],
+                    keysecondary: [],
+                    comment: settings.wiEntryTitle,
+                    content: content,
+                    constant: true,
+                    selective: false,
+                    selectiveLogic: 0,
+                    addMemo: true,
+                    order: 100,
+                    position: 0,
+                    disable: false,
+                    excludeRecursion: false,
+                    probability: 100,
+                    useProbability: false,
+                    depth: 4,
+                    group: '',
+                    groupOverride: false,
+                    groupWeight: 100,
+                    scanDepth: null,
+                    caseSensitive: null,
+                    matchWholeWords: null,
+                    useGroupScoring: null,
+                    automationId: '',
+                    role: 0,
+                    vectorized: false,
+                    delayed_until_recursion: false,
+                };
+            }
+
+            // 保存
+            const saveResp = await fetch('/api/worldinfo/edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: settings.wiBookName, data }),
+            });
+
+            if (!saveResp.ok) throw new Error(`保存失败 HTTP ${saveResp.status}`);
+
+            setWiStatus('ok', `✅ 已注入世界书「${settings.wiBookName}」`);
+            LOG('世界书注入成功', settings.wiBookName);
+        } catch (err) {
+            setWiStatus('err', `❌ 注入失败: ${err.message}`);
+            LOG('世界书注入失败', err);
+        }
+    }
+
+    // ==============================
+    // UI 构建
+    // ==============================
+    function buildPanel() {
+        const overlay = document.createElement('div');
+        overlay.id = 'cycle-tracker-overlay';
+        overlay.innerHTML = `
+<div id="cycle-tracker-panel">
+  <h2>🌙 生理周期追踪器 <span class="ct-close" id="ct-panel-close">✕</span></h2>
+
+  <!-- Tab 导航 -->
+  <div class="ct-tabs">
+    <div class="ct-tab active" data-tab="status">状态</div>
+    <div class="ct-tab" data-tab="record">记录</div>
+    <div class="ct-tab" data-tab="settings">设置</div>
+  </div>
+
+  <!-- ===== Tab: 状态 ===== -->
+  <div class="ct-tab-content active" id="ct-tab-status">
+    <div id="ct-status-display">
+      <div id="ct-phase-badge" class="ct-phase-badge ct-phase-unknown">❓ 未知</div>
+      <div class="ct-info-row" id="ct-info-cycleday"></div>
+      <div class="ct-info-row" id="ct-info-next"></div>
+      <div class="ct-info-row" id="ct-info-ovulation"></div>
+      <div class="ct-info-row" id="ct-info-laststart"></div>
+    </div>
+    <div id="ct-wi-status" class="ct-wi-status ct-wi-warn">⚠ 尚未配置世界书</div>
+    <div class="ct-btn-row" style="margin-top:10px">
+      <button class="ct-btn ct-btn-primary" id="ct-btn-inject">💉 立即注入世界书</button>
+    </div>
+  </div>
+
+  <!-- ===== Tab: 记录 ===== -->
+  <div class="ct-tab-content" id="ct-tab-record">
+    <div class="ct-section">
+      <label>记录月经开始日期</label>
+      <input type="date" class="ct-input" id="ct-input-date" />
+      <div class="ct-btn-row">
+        <button class="ct-btn ct-btn-primary" id="ct-btn-add-date">＋ 添加记录</button>
+        <button class="ct-btn ct-btn-secondary" id="ct-btn-today">今天</button>
+      </div>
+    </div>
+    <div class="ct-section">
+      <label>历史记录</label>
+      <div id="ct-history-list"></div>
+    </div>
+  </div>
+
+  <!-- ===== Tab: 设置 ===== -->
+  <div class="ct-tab-content" id="ct-tab-settings">
+    <div class="ct-section">
+      <label>周期参数</label>
+      <div class="ct-setting-row">
+        <span>周期天数</span>
+        <input type="number" class="ct-input" id="ct-cycle-length" min="21" max="40" style="width:72px" />
+      </div>
+      <div class="ct-setting-row">
+        <span>经期天数</span>
+        <input type="number" class="ct-input" id="ct-period-length" min="2" max="10" style="width:72px" />
+      </div>
+    </div>
+    <div class="ct-section">
+      <label>世界书设置</label>
+      <div class="ct-setting-row">
+        <span>世界书名称</span>
+      </div>
+      <input type="text" class="ct-input" id="ct-wi-name" placeholder="输入世界书名称（不含.json）" style="margin-bottom:8px" />
+      <div class="ct-setting-row">
+        <span>条目标题/关键词</span>
+      </div>
+      <input type="text" class="ct-input" id="ct-wi-entry" placeholder="如：生理周期状态" style="margin-bottom:8px" />
+      <div class="ct-setting-row">
+        <span>自动注入（每次打开面板）</span>
+        <label class="ct-toggle">
+          <input type="checkbox" id="ct-auto-inject" />
+          <span class="ct-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="ct-setting-row">
+        <span>显示浮动按钮</span>
+        <label class="ct-toggle">
+          <input type="checkbox" id="ct-show-btn" />
+          <span class="ct-toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="ct-btn-row">
+      <button class="ct-btn ct-btn-primary" id="ct-btn-save-settings">💾 保存设置</button>
+    </div>
+  </div>
+
+</div>`;
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    // ==============================
+    // UI 渲染
+    // ==============================
+    function renderStatus() {
+        const settings = getSettings();
+        const status = calcCycleStatus(settings);
+        const phaseInfo = PHASES[status.phase] || PHASES.unknown;
+
+        const badge = document.getElementById('ct-phase-badge');
+        if (badge) {
+            badge.className = `ct-phase-badge ct-phase-${status.phase}`;
+            badge.textContent = `${phaseInfo.emoji} ${phaseInfo.name}`;
+        }
+
+        const setRow = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = text;
+        };
+
+        if (status.cycleDay) {
+            setRow('ct-info-cycleday', `周期第 <span>${status.cycleDay}</span> 天`);
+        } else {
+            setRow('ct-info-cycleday', '暂无数据，请先记录经期开始日期');
+        }
+
+        if (status.nextPeriod) {
+            const days = status.daysUntilNext;
+            setRow('ct-info-next', `下次月经：<span>${formatDate(status.nextPeriod)}</span>（${days > 0 ? days + ' 天后' : days === 0 ? '今天' : Math.abs(days) + ' 天前'}）`);
+        } else {
+            setRow('ct-info-next', '');
+        }
+
+        if (status.ovulationDate) {
+            const diff = status.ovulationDiff;
+            setRow('ct-info-ovulation', `排卵日约：<span>${formatDate(status.ovulationDate)}</span>（${diff > 0 ? diff + ' 天后' : diff === 0 ? '今天' : Math.abs(diff) + ' 天前'}）`);
+        } else {
+            setRow('ct-info-ovulation', '');
+        }
+
+        if (status.lastStart) {
+            setRow('ct-info-laststart', `上次月经：<span>${formatDate(status.lastStart)}</span>`);
+        } else {
+            setRow('ct-info-laststart', '');
+        }
+    }
+
+    function renderHistory() {
+        const settings = getSettings();
+        const list = document.getElementById('ct-history-list');
+        if (!list) return;
+
+        const dates = [...(settings.periodStartDates || [])].sort().reverse();
+        if (dates.length === 0) {
+            list.innerHTML = '<div style="color:#a6adc8;font-size:12px;text-align:center;padding:8px">暂无记录</div>';
+            return;
+        }
+
+        list.innerHTML = dates.map((d, i) => `
+<div class="ct-history-item">
+  <span>${formatDate(d)} <span style="color:#585b70;font-size:11px">(${d})</span></span>
+  <span class="ct-history-del" data-date="${d}">✕</span>
+</div>`).join('');
+
+        list.querySelectorAll('.ct-history-del').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const dateToRemove = btn.dataset.date;
+                settings.periodStartDates = settings.periodStartDates.filter(d => d !== dateToRemove);
+                saveSettings();
+                renderHistory();
+                renderStatus();
+            });
+        });
+    }
+
+    function renderSettingsForm() {
+        const settings = getSettings();
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+        const setChecked = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+
+        setVal('ct-cycle-length', settings.cycleLength);
+        setVal('ct-period-length', settings.periodLength);
+        setVal('ct-wi-name', settings.wiBookName);
+        setVal('ct-wi-entry', settings.wiEntryTitle);
+        setChecked('ct-auto-inject', settings.autoInject);
+        setChecked('ct-show-btn', settings.showBtn);
+    }
+
+    // ==============================
+    // 事件绑定
+    // ==============================
+    function bindEvents(overlay) {
+        // 关闭按钮
+        document.getElementById('ct-panel-close')?.addEventListener('click', closePanel);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closePanel();
+        });
+
+        // Tab切换
+        overlay.querySelectorAll('.ct-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                overlay.querySelectorAll('.ct-tab').forEach(t => t.classList.remove('active'));
+                overlay.querySelectorAll('.ct-tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`ct-tab-${tabName}`)?.classList.add('active');
+
+                if (tabName === 'settings') renderSettingsForm();
+                if (tabName === 'record') renderHistory();
+            });
+        });
+
+        // 今天快捷键
+        document.getElementById('ct-btn-today')?.addEventListener('click', () => {
+            const input = document.getElementById('ct-input-date');
+            if (input) input.value = today();
+        });
+
+        // 添加日期
+        document.getElementById('ct-btn-add-date')?.addEventListener('click', () => {
+            const input = document.getElementById('ct-input-date');
+            if (!input || !input.value) {
+                toastr.warning('请先选择日期');
+                return;
+            }
+            const settings = getSettings();
+            const dateVal = input.value;
+            if (settings.periodStartDates.includes(dateVal)) {
+                toastr.info('该日期已存在');
+                return;
+            }
+            settings.periodStartDates.push(dateVal);
+            saveSettings();
+            renderHistory();
+            renderStatus();
+            toastr.success(`已添加：${formatDate(dateVal)}`);
+        });
+
+        // 立即注入
+        document.getElementById('ct-btn-inject')?.addEventListener('click', () => {
+            injectToWorldInfo();
+        });
+
+        // 保存设置
+        document.getElementById('ct-btn-save-settings')?.addEventListener('click', () => {
+            const settings = getSettings();
+            const getNum = (id, fallback) => {
+                const el = document.getElementById(id);
+                return el ? (parseInt(el.value) || fallback) : fallback;
+            };
+            const getStr = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.value.trim() : '';
+            };
+            const getBool = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.checked : false;
+            };
+
+            settings.cycleLength = getNum('ct-cycle-length', 28);
+            settings.periodLength = getNum('ct-period-length', 5);
+            settings.wiBookName = getStr('ct-wi-name');
+            settings.wiEntryTitle = getStr('ct-wi-entry') || '生理周期状态';
+            settings.autoInject = getBool('ct-auto-inject');
+            settings.showBtn = getBool('ct-show-btn');
+
+            saveSettings();
+            renderStatus();
+            updateBtnVisibility();
+            toastr.success('设置已保存');
+        });
+    }
+
+    // ==============================
+    // 面板开关
+    // ==============================
+    function openPanel() {
+        const overlay = document.getElementById('cycle-tracker-overlay');
+        if (!overlay) return;
+        overlay.classList.add('ct-visible');
+        renderStatus();
+        renderHistory();
+
+        const settings = getSettings();
+        if (settings.autoInject && settings.wiBookName) {
+            injectToWorldInfo();
+        }
+    }
+
+    function closePanel() {
+        const overlay = document.getElementById('cycle-tracker-overlay');
+        if (overlay) overlay.classList.remove('ct-visible');
+    }
+
+    function updateBtnVisibility() {
+        const settings = getSettings();
+        const btn = document.getElementById('cycle-tracker-btn');
+        if (btn) btn.style.display = settings.showBtn ? '' : 'none';
+    }
+
+    // ==============================
+    // 初始化
+    // ==============================
     function init() {
+        LOG('初始化');
+
+        // 初始化设置
         getSettings();
-        buildUI();
-        setupInjection();
+
+        // 构建面板
+        const overlay = buildPanel();
+        bindEvents(overlay);
+
+        // 浮动按钮
+        const btn = document.createElement('div');
+        btn.id = 'cycle-tracker-btn';
+        btn.title = '生理周期追踪器';
+        btn.textContent = '🌙';
+        btn.addEventListener('click', openPanel);
+        document.body.appendChild(btn);
+        updateBtnVisibility();
+
+        // 监听事件（世界书可能在chat切换时需要重新注入）
+        const { eventSource, event_types } = SillyTavern.getContext();
+        if (eventSource && event_types) {
+            eventSource.on(event_types.CHAT_CHANGED, () => {
+                const settings = getSettings();
+                if (settings.autoInject && settings.wiBookName) {
+                    // 延迟确保WI已加载
+                    setTimeout(() => injectToWorldInfo(), 1500);
+                }
+            });
+        }
+
+        LOG('初始化完成');
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+    // ==============================
+    // 入口
+    // ==============================
+    const { eventSource, event_types } = SillyTavern.getContext();
+    if (eventSource && event_types) {
+        eventSource.on(event_types.APP_READY, init);
     } else {
-        init();
+        // 降级：直接初始化
+        if (document.readyState === 'complete') {
+            init();
+        } else {
+            window.addEventListener('load', init);
+        }
     }
 
 })();

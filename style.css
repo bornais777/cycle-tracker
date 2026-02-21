@@ -1,174 +1,253 @@
-/* ── Cycle Tracker Styles ─────────────────────────────────── */
-
-.ct-wrap { padding: 8px 0; }
-
-.ct-field { margin: 10px 0; }
-.ct-field label {
-    display: block;
-    font-size: 0.85em;
-    margin-bottom: 4px;
-    opacity: 0.75;
+/* ============ 浮动按钮 ============ */
+#cycle-tracker-btn {
+    position: fixed;
+    bottom: 80px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6e3fa3, #b56cbf);
+    color: #fff;
+    font-size: 22px;
+    line-height: 44px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 9999;
+    box-shadow: 0 3px 12px rgba(110,63,163,0.45);
+    user-select: none;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+#cycle-tracker-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 5px 18px rgba(110,63,163,0.6);
 }
 
-/* ── Status Card ─────────────────────────────────────────── */
-.ct-status-card {
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin: 12px 0;
-    background: var(--SmartThemeBlurTintColor);
-    border-left: 4px solid var(--SmartThemeQuoteColor);
-}
-.ct-status-phase {
-    font-size: 1.05em;
-    font-weight: bold;
-    margin-bottom: 6px;
-}
-.ct-status-meta {
-    font-size: 0.83em;
-    opacity: 0.72;
-    line-height: 1.7;
-}
-.ct-inject-preview-label {
-    margin-top: 10px;
-    font-size: 0.78em;
-    opacity: 0.55;
-}
-.ct-inject-preview {
-    margin-top: 4px;
-    padding: 7px 10px;
-    background: rgba(0,0,0,0.18);
-    border-radius: 5px;
-    font-size: 0.8em;
-    font-family: monospace;
-    white-space: pre-wrap;
-    color: var(--SmartThemeQuoteColor);
-    word-break: break-word;
-}
-
-/* ── Timeline ────────────────────────────────────────────── */
-.ct-timeline-wrap { margin: 10px 0; }
-.ct-timeline-label {
-    font-size: 0.82em;
-    opacity: 0.6;
-    margin-bottom: 6px;
-}
-.ct-timeline {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
-}
-.ct-day-cell {
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    display: flex;
+/* ============ 面板遮罩 ============ */
+#cycle-tracker-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 10000;
     align-items: center;
     justify-content: center;
-    font-size: 0.72em;
-    cursor: default;
-    position: relative;
-    transition: transform 0.12s;
-    border: 1px solid transparent;
-    user-select: none;
 }
-.ct-day-cell:hover {
-    transform: scale(1.25);
-    z-index: 20;
-}
-.ct-day-cell.phase-menstrual  { background:#c0392b33; color:#e74c3c; border-color:#e74c3c55; }
-.ct-day-cell.phase-follicular { background:#27ae6033; color:#2ecc71; border-color:#2ecc7155; }
-.ct-day-cell.phase-ovulation  { background:#f39c1233; color:#f1c40f; border-color:#f1c40f55; }
-.ct-day-cell.phase-luteal     { background:#8e44ad33; color:#9b59b6; border-color:#9b59b655; }
-.ct-day-cell.phase-pms        { background:#e67e2233; color:#e67e22; border-color:#e67e2255; }
-.ct-day-cell.is-today {
-    box-shadow: 0 0 0 2px white;
-    font-weight: bold;
-    transform: scale(1.15);
-}
-
-/* ── Legend ──────────────────────────────────────────────── */
-.ct-legend {
+#cycle-tracker-overlay.ct-visible {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 8px 0 4px;
-    font-size: 0.78em;
-    opacity: 0.8;
-}
-.ct-legend-item { display: flex; align-items: center; gap: 5px; }
-.ct-legend-dot {
-    width: 10px; height: 10px;
-    border-radius: 2px;
-    flex-shrink: 0;
 }
 
-/* ── Manual Correction ───────────────────────────────────── */
-.ct-correction-box {
-    background: var(--SmartThemeBlurTintColor);
-    border-radius: 6px;
-    padding: 12px;
-    margin: 8px 0;
+/* ============ 面板主体 ============ */
+#cycle-tracker-panel {
+    background: var(--SmartThemeBlurTintColor, #1e1e2e);
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    border-radius: 14px;
+    padding: 20px 22px 18px;
+    width: min(360px, 94vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    color: var(--SmartThemeBodyColor, #cdd6f4);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+    font-size: 14px;
 }
-.ct-correction-row {
+#cycle-tracker-panel h2 {
+    margin: 0 0 14px;
+    font-size: 16px;
+    color: #cba6f7;
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
 }
-.ct-correction-row label { font-size: 0.85em; opacity: 0.75; white-space: nowrap; }
-.ct-correction-row input[type="number"] { width: 70px; }
-
-/* ── API Panel ───────────────────────────────────────────── */
-.ct-api-box {
-    background: var(--SmartThemeBlurTintColor);
+#cycle-tracker-panel .ct-close {
+    margin-left: auto;
+    cursor: pointer;
+    font-size: 18px;
+    color: #888;
+    line-height: 1;
+    padding: 2px 6px;
     border-radius: 6px;
-    padding: 12px;
-    margin: 8px 0;
 }
-.ct-api-note {
-    font-size: 0.8em;
-    opacity: 0.6;
-    margin-bottom: 8px;
-    line-height: 1.5;
-}
-.ct-api-json {
-    font-family: monospace;
-    font-size: 0.8em;
-    padding: 10px;
-    background: rgba(0,0,0,0.2);
-    border-radius: 5px;
-    white-space: pre;
-    overflow-x: auto;
-    max-height: 260px;
-    overflow-y: auto;
-}
+#cycle-tracker-panel .ct-close:hover { color: #cdd6f4; background: rgba(255,255,255,0.08); }
 
-/* ── Buttons ─────────────────────────────────────────────── */
-.ct-btn-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-
-/* ── Badge ───────────────────────────────────────────────── */
-.ct-badge {
-    display: inline-block;
-    padding: 1px 7px;
+/* ============ 区块 ============ */
+.ct-section {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.04);
     border-radius: 10px;
-    font-size: 0.75em;
-    background: var(--SmartThemeQuoteColor);
-    color: #000;
-    margin-left: 6px;
-    vertical-align: middle;
-    opacity: 0.85;
+    border: 1px solid rgba(255,255,255,0.07);
+}
+.ct-section label {
+    display: block;
+    font-size: 12px;
+    color: #a6adc8;
+    margin-bottom: 6px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
-/* ── Divider ─────────────────────────────────────────────── */
-.ct-section-title {
-    font-size: 0.82em;
-    opacity: 0.55;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin: 14px 0 6px;
+/* ============ 输入 ============ */
+.ct-input {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 7px;
+    color: var(--SmartThemeBodyColor, #cdd6f4);
+    padding: 6px 10px;
+    font-size: 13px;
+    width: 100%;
+    box-sizing: border-box;
 }
+.ct-input:focus { outline: none; border-color: #cba6f7; }
+
+/* ============ 状态显示 ============ */
+#ct-status-display {
+    background: linear-gradient(135deg, rgba(110,63,163,0.2), rgba(181,108,191,0.12));
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(203,166,247,0.2);
+}
+#ct-status-display .ct-phase-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+#ct-status-display .ct-info-row {
+    font-size: 13px;
+    color: #cdd6f4;
+    margin: 3px 0;
+}
+#ct-status-display .ct-info-row span {
+    color: #cba6f7;
+    font-weight: 600;
+}
+
+/* ============ 阶段颜色 ============ */
+.ct-phase-menstrual  { background: rgba(243,139,168,0.25); color: #f38ba8; border: 1px solid rgba(243,139,168,0.4); }
+.ct-phase-follicular { background: rgba(166,227,161,0.25); color: #a6e3a1; border: 1px solid rgba(166,227,161,0.4); }
+.ct-phase-ovulation  { background: rgba(249,226,175,0.25); color: #f9e2af; border: 1px solid rgba(249,226,175,0.4); }
+.ct-phase-luteal     { background: rgba(137,180,250,0.25); color: #89b4fa; border: 1px solid rgba(137,180,250,0.4); }
+.ct-phase-unknown    { background: rgba(166,173,200,0.15); color: #a6adc8; border: 1px solid rgba(166,173,200,0.2); }
+
+/* ============ 按钮 ============ */
+.ct-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: opacity 0.15s, transform 0.1s;
+}
+.ct-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+.ct-btn-primary { background: linear-gradient(135deg, #6e3fa3, #b56cbf); color: #fff; }
+.ct-btn-secondary { background: rgba(255,255,255,0.08); color: #cdd6f4; border: 1px solid rgba(255,255,255,0.1); }
+.ct-btn-danger { background: rgba(243,139,168,0.15); color: #f38ba8; border: 1px solid rgba(243,139,168,0.25); }
+.ct-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* ============ 历史记录 ============ */
+#ct-history-list {
+    max-height: 130px;
+    overflow-y: auto;
+    margin-top: 6px;
+}
+.ct-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: 6px;
+    margin-bottom: 3px;
+    font-size: 12px;
+    background: rgba(255,255,255,0.03);
+}
+.ct-history-item:hover { background: rgba(255,255,255,0.07); }
+.ct-history-del {
+    cursor: pointer;
+    color: #f38ba8;
+    font-size: 14px;
+    padding: 0 4px;
+    opacity: 0.6;
+}
+.ct-history-del:hover { opacity: 1; }
+
+/* ============ 世界书注入状态 ============ */
+#ct-wi-status {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+}
+.ct-wi-ok   { background: rgba(166,227,161,0.1); color: #a6e3a1; border: 1px solid rgba(166,227,161,0.2); }
+.ct-wi-warn { background: rgba(249,226,175,0.1); color: #f9e2af; border: 1px solid rgba(249,226,175,0.2); }
+.ct-wi-err  { background: rgba(243,139,168,0.1); color: #f38ba8; border: 1px solid rgba(243,139,168,0.2); }
+
+/* ============ 设置 ============ */
+.ct-setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.ct-setting-row input[type=number] {
+    width: 64px;
+    text-align: center;
+}
+.ct-toggle {
+    position: relative;
+    width: 38px;
+    height: 20px;
+    flex-shrink: 0;
+}
+.ct-toggle input { opacity: 0; width: 0; height: 0; }
+.ct-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.12);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.ct-toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+.ct-toggle input:checked + .ct-toggle-slider { background: #6e3fa3; }
+.ct-toggle input:checked + .ct-toggle-slider::before { transform: translateX(18px); }
+
+/* ============ tab ============ */
+.ct-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: 8px;
+}
+.ct-tab {
+    padding: 5px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #a6adc8;
+    transition: background 0.15s, color 0.15s;
+}
+.ct-tab:hover { background: rgba(255,255,255,0.06); }
+.ct-tab.active { background: rgba(203,166,247,0.15); color: #cba6f7; }
+
+/* ============ tab内容 ============ */
+.ct-tab-content { display: none; }
+.ct-tab-content.active { display: block; }
